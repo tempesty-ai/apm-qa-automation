@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+tests/load/results*.csv
+.env
