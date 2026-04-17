@@ -1,0 +1,54 @@
+name: APM QA Automation CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Start environment
+        run: docker compose up -d --build
+
+      - name: Wait for collector health
+        run: |
+          for i in $(seq 1 20); do
+            if curl -sf http://localhost:8080/health; then
+              echo "Collector is ready"
+              break
+            fi
+            echo "Waiting... ($i/20)"
+            sleep 3
+          done
+
+      - name: Install test dependencies
+        run: pip install pytest httpx
+
+      - name: Run API tests
+        run: pytest tests/api/ -v --tb=short
+
+      - name: Run load test (30s)
+        run: |
+          pip install locust
+          locust -f tests/load/locustfile.py \
+            --headless -u 10 -r 2 -t 30s \
+            --host http://localhost:8080 \
+            --csv=tests/load/results
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: tests/load/results*.csv
